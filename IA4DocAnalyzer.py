@@ -10,6 +10,7 @@ import os
 import io
 import zipfile
 import unicodedata
+# MA MODIF
 
 
 st.set_page_config(page_title='Analyse Fiches IA4Doc', layout='wide')

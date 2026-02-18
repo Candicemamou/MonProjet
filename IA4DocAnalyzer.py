@@ -589,24 +589,16 @@ def _move_values(ws, src_row: int, dst_row: int, n_rows: int, n_cols: int) -> No
             ws.cell(dst_row + r_off, c).value = tmp[r_off][c-1]
 
 def _normalize_table2_location(ws) -> tuple[int, int]:
-    """Ensure Tableau 2 is anchored at row 20 (title in B20). Returns (title_row, labels_start_row)."""
-    TARGET_ROW = 20
-    found_row = _find_row_by_title_fuzzy(ws, _T2_TITLE)
-    title_row = found_row or TARGET_ROW
-    labels_start = title_row + 1
-    # If table exists elsewhere and B20 is blank, move it to row 20 to keep a single source of truth.
-    if found_row and found_row != TARGET_ROW and _is_blank(ws.cell(TARGET_ROW, 2).value):
-        height = _detect_table_block_height(ws, found_row + 1)
-        dates = _read_date_headers(ws, found_row, start_col=3)
-        n_rows = 1 + height
-        n_cols = 2 + max(1, len(dates))
-        _move_values(ws, found_row, TARGET_ROW, n_rows, n_cols)
-        title_row = TARGET_ROW
-        labels_start = TARGET_ROW + 1
-    # Ensure title exists at anchor
-    if _is_blank(ws.cell(TARGET_ROW, 2).value):
-        ws.cell(TARGET_ROW, 2).value = _T2_TITLE
-    return TARGET_ROW, TARGET_ROW + 1
+    """Locate Tableau 2 dynamically (no fixed row).
+
+    Returns (header_row, labels_start_row). The header row is the row where the title
+    is in column B and the weekly date headers start at column C.
+    """
+    found_row = _find_row_by_title_fuzzy(ws, _T2_TITLE) or _find_row_by_title(ws, _T2_TITLE)
+    if not found_row:
+        # Fallback to 20 for backward compatibility, but do NOT move anything.
+        return 20, 21
+    return int(found_row), int(found_row) + 1
 def _read_date_headers(ws, row: int, start_col: int = 3) -> list[_date]:
     out = []
     c = start_col
@@ -915,7 +907,7 @@ with st.expander("📌 KPI (3 tableaux puis 3 graphiques)", expanded=True):
                 t2_current.loc["Total"] = int(t2_current.sum())
 
             # --- Écrire dans l'historique (Tableau 1 & 2) sur le workbook d'édition
-            t1_row = _find_row_by_title(ws_edit, _T1_TITLE) or 3
+            t1_row = _find_row_by_title_fuzzy(ws_edit, _T1_TITLE) or _find_row_by_title(ws_edit, _T1_TITLE) or 3
             _write_series_to_block(ws_edit, t1_row, t1_row + 1, snap, t1_current, desired_order=cats_order)
 
             # Ordre des états = ordre existant dans tableaux_hebdo (B20..) + nouveaux états du CDC,
@@ -983,14 +975,14 @@ with st.expander("📌 KPI (3 tableaux puis 3 graphiques)", expanded=True):
 
         # --- Écrire dans l'historique (Tableau 3)
         if t3_current is not None and not t3_current.empty:
-            t3_row = _find_row_by_title(ws_edit, _T3_TITLE) or 12
+            t3_row = _find_row_by_title_fuzzy(ws_edit, _T3_TITLE) or _find_row_by_title(ws_edit, _T3_TITLE) or 12
             _write_series_to_block(ws_edit, t3_row, t3_row+1, snap, t3_current, desired_order=None)
 
 
 
         # ===== Lire les 3 tableaux depuis l'historique (après écriture) =====
         # Tableau 1
-        t1_row = _find_row_by_title(ws_values, _T1_TITLE) or 3
+        t1_row = _find_row_by_title_fuzzy(ws_values, _T1_TITLE) or _find_row_by_title(ws_values, _T1_TITLE) or 3
         tab1_hist = _read_block(ws_values, t1_row, t1_row+1)
 
         # Tableau 2
@@ -1004,7 +996,7 @@ with st.expander("📌 KPI (3 tableaux puis 3 graphiques)", expanded=True):
         tab2_hist = tab2_hist.apply(pd.to_numeric, errors="coerce").fillna(0).astype(int)
 
         # Tableau 3
-        t3_row = _find_row_by_title(ws_edit, _T3_TITLE) or 12
+        t3_row = _find_row_by_title_fuzzy(ws_edit, _T3_TITLE) or _find_row_by_title(ws_edit, _T3_TITLE) or 12
         tab3_hist = _read_block(ws_values, t3_row, t3_row+1)
 
         
